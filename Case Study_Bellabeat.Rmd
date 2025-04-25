@@ -1,0 +1,1323 @@
+---
+title: "Case Study - Bellabeat"
+author: "JMK"
+date: "2025-03-01"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 6
+    toc_float: true
+    code_folding: show
+    self_contained: true
+---
+# Introduction
+
+Bellabeat is a health-focused smart tech manufacturer. The Bellabeat product line of wearable tech captures user activity data to empower women with knowledge about their own health and habits.
+
+The key objective for this case study is to analyze smart device usage data to identify trends in how consumers use non-Bellabeat smart devices. These insights will then be applied to the Bellabeat app in order to understand how the trends could benefit Bellabeat users. The analysis will explore how these insights could influence the Bellabeat content marketing strategy, helping the company better align its products with consumer needs and preferences.
+
+We will adhere to the A.P.P.A.S.A. Data Analysis Cycle framework to identify key trends and provide recommendations that can drive business results, including increased market share and improved consumer sentiment.
+
+
+# 1. Ask Phase
+
+### 1.1 Business Objective
+
+The Bellabeat team has obtained non-Bellabeat smart device usage data. As Bellabeat data analysts, we are tasked with exploring key trends throughout this data and addressing the following questions:
+
+- What are the behavioral trends of users of non-Bellabeat wearable devices?
+- How might these trends apply to Bellabeat customers?
+- How could these trends help influence the Bellabeat content marketing strategy?
+
+### 1.2 Stakeholders:
+
+- Urška Sršen: Cofounder & Chief Creative Officer
+- Sando Mur: Cofounder
+- Bellabeat Data Analytics team
+
+Given our internal audience, we will curate a presentation that includes all technical details while ensuring complete transparency to facilitate seamless feedback and future collaborations.
+
+Our stakeholders' vision of project success includes a comprehensive exploratory analysis with actionable insights, aimed at:
+
+- Optimizing the Bellabeat content marketing strategy
+- More effectively leveraging Bellabeat app capabilities
+- Driving increased customer sentiment through health optimization, ultimately fostering customer loyalty, attracting new users, and expanding market share
+
+# 2. Prepare Phase
+
+## 2.1 Available Data
+
+In this phase, we will collect and prepare the necessary data for analysis.
+
+The available data is **FitBit Fitness Tracker Data** (CC0: Public Domain, dataset made available through Mobius, hosted on Kaggle.
+
+### 2.1.1 Metadata
+
+The metadata informs us that the datasets are open-source and available for our use without asking permission.
+
+These datasets contain a sample of personal fitness tracker data from 33 users who consented to submit their personal tracker data -- which includes hourly output for calories burned, step counts, distance, and sleep monitoring.
+
+### 2.1.2 Verification
+
+We have sorted and filtered the data, creating Pivot Tables in spreadsheets to ensure data accuracy, specifically focusing on the integrity of the date ranges and user IDs.
+
+Below is a summary breakdown of the datasets.
+
+| Table Name | File Type | Description |
+|----------|----------|----------|
+| dailyActivity_merged | CSV | Daily Activity: steps, distance, activity-level distance, activity-level minutes, calories | 
+| hourlyCalories_merged | CSV | Hourly Calories |
+| hourlySteps_merged | CSV | Hourly Steps |
+| sleepDay_merged | CSV | Daily Sleep: minutes asleep, minutes in bed |
+
+Through this process, we have found some users with significantly low volumes of entries -- indicating suboptimal device usage -- and therefore we have created entry count thresholds per user, removing those user who have not met these thresholds. The thresholds and resulting figures across the datasets are as follows:
+
+| Table Name | Original Total Unique Users | Threshold | New Total Unique Users | Total Days |
+|----------|----------|----------|----------|----------|
+| dailyActivity_merged | 33 | 10 entries (days)* | 32 | 31 |
+| hourlyCalories_merged | 33 | 240 entries (hours)** | 32 | 31 |
+| hourlySteps_merged | 33 | 240 entries (hours) | 32 | 31 |
+| sleepDay_merged | 24 | 10 entries (days)*** | 15 | 31 |
+
+*10 days was chosen as the threshold i.e., 10 days minimum of data entry per user.
+**240 hours was chosen to align with the 10 day threshold.
+***sleepDay_merged now only includes data entries for 15 users, which is less than ideal although sleep is a critical metric for our analysis.
+
+## 2.2 Building the Environment
+
+We have chosen for this analysis due to its strong capabiliities in data manipulation, visualization, and statistical analysis. It is particularly well-suited for working wiith structured datasets and provides a wide range of packages -- such as tidyverse, ggplot2, and lubridate -- that streamline the data cleaning, exploration, and visualization process. R also integrates well with R Markdown, making it easy to document and present the analysis in a clear and reproducible format.
+
+### 2.2.1 Load Libraries
+
+We will use the following packages for our analysis:
+
+- tidyverse
+- lubridate
+- data.table
+- stringr
+- plotly
+- janitor
+- here
+- skimr
+- ggrepel
+- moments
+- markdown
+```{r setup, echo=TRUE, eval=TRUE, results='hide', message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(data.table)
+library(stringr)
+library(plotly)
+library(janitor)
+library(here)
+library(skimr)
+library(ggrepel)
+library(moments)
+library(markdown)
+```
+
+### 2.2.2 Import Datasets
+
+We will import the following datasets:
+
+- dailyActivity_merged
+- hourlyCalories_merged
+- hourlySteps_merged
+- sleepDay_merged
+```{r step222, echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+daily_activity <- read_csv("Wearable data/dailyActivity_merged_cleaned.csv")
+hourly_calories <- read_csv("Wearable data/hourlyCalories_merged_cleaned.csv")
+hourly_steps <- read_csv("Wearable data/hourlySteps_merged_cleaned.csv")
+daily_sleep <- read_csv("Wearable data/sleepDay_merged_cleaned.csv")
+```
+### 2.2.3 Preview
+
+Before continuing, let's preview our datasets to ensure completeness and accuracy.
+```{r step223, echo=TRUE, results='hide', message=FALSE}
+head(daily_activity)
+str(daily_activity)
+head(hourly_calories)
+str(hourly_calories)
+head(hourly_steps)
+str(hourly_steps)
+head(daily_sleep)
+str(daily_sleep)
+```
+
+# 3. Process Phase
+
+
+## 3.1 Cleaning
+
+
+### 3.1.1 Count Unique Users
+
+We’ll count the users included in our datasets by checking the count of unique IDs.
+```{r step311, echo=TRUE}
+print(daily_activity %>% summarize(unique_ids = n_distinct(Id, na.rm = TRUE)))
+print(hourly_calories %>% summarize(unique_ids = n_distinct(Id, na.rm = TRUE)))
+print(hourly_steps %>% summarize(unique_ids = n_distinct(Id, na.rm = TRUE)))
+print(daily_sleep %>% summarize(unique_ids = n_distinct(Id, na.rm = TRUE)))
+```
+
+These results are exactly as we expected them, due to our work with Pivot Tables in the verification step (2.1.2).
+
+### 3.1.2 Count missing data and nulls
+```{r step312, echo=TRUE}
+# check for missing or blank values
+daily_activity %>% 
+  filter(Id == "" | is.na(Id) |
+           ActivityDate == "" | is.na(ActivityDate))
+hourly_calories %>% 
+  filter(Id == "" | is.na(Id) |
+           ActivityHour == "" | is.na(ActivityHour))
+hourly_steps %>% 
+  filter(Id == "" | is.na(Id) |
+           ActivityHour == "" | is.na(ActivityHour))
+daily_sleep %>% 
+  filter(Id == "" | is.na(Id) |
+           SleepDay == "" | is.na(SleepDay))
+```
+
+No blanks or N/As exist across the Id or date/date-time columns of the data frames.
+
+### 3.1.3 Count Duplicates
+
+Next, we'll count duplicates in our datasets.
+```{r step313, echo=TRUE}
+sum(duplicated(daily_activity))
+sum(duplicated(hourly_calories))
+sum(duplicated(hourly_steps))
+sum(duplicated(daily_sleep))
+```
+
+We'll take a look at the three duplicates in daily_sleep in the next step.
+
+#### 3.1.3.1 Inspect Duplicates
+
+Because daily_sleep appears to contain three duplicates, we'll inspect them further by isolating rows appearing more than once to determine how to proceed.
+```{r inspect duplicates, echo=TRUE}
+
+# Identify duplicate sleep records by grouping the same user on the same day
+daily_sleep %>% 
+  group_by(Id, SleepDay) %>% 
+  filter(n() > 1) %>% 
+  print(n = 10)
+```
+
+
+#### 3.1.3.2 Remove Duplicates
+
+Since we can see all six occurrences where three rows are duplicated, we’ll permanently remove one occurrence (the second) of each duplicate row by overwriting with only the unique rows.
+```{r step3132, echo=TRUE, results='hide'}
+
+# Remove duplicate sleep records, keeping only the first per user per day
+daily_sleep <- daily_sleep %>%
+  distinct(Id, SleepDay, .keep_all = TRUE)
+
+```
+
+Finally we confirm the changes.
+```{r step3132-confirm, echo=TRUE}
+daily_sleep %>% 
+  filter(duplicated(select(., Id, SleepDay))) %>% 
+  print(n = 10)
+```
+
+
+### 3.1.4 Clean(column names)
+
+We want to ensure our columns are clean and uniform with lower case.
+```{r step314, echo=TRUE, results='hide'}
+
+# Standardize columns across all datasets
+daily_activity <- clean_names(daily_activity)
+hourly_calories <- clean_names(hourly_calories)
+hourly_steps <- clean_names(hourly_steps)
+daily_sleep <- clean_names(daily_sleep)
+```
+
+## 3.2 Formatting
+
+### 3.2.1 Lowercase Column Names
+
+We'll convert all names across our data frames to lowercase to help prevent case-sensitive errors.
+```{r step321, echo=TRUE, results='hide'}
+# Convert all column names to lowercase for consistency
+names(daily_activity) <- tolower(names(daily_activity))
+names(hourly_calories) <- tolower(names(hourly_calories))
+names(hourly_steps) <- tolower(names(hourly_steps))
+names(daily_sleep) <- tolower(names(daily_sleep))
+```
+
+
+### 3.2.2 Update Variable Type
+
+The variable types across data frames specifically in two columns require updating. Each id column and treats the user IDs as <dbl> (i.e., double, for decimals); each date column treats the date as <chr>.
+
+#### 3.2.2.1 Update ID Column Data Type
+
+First, we’ll address the id columns. -- An initial instinct was to convert <dbl> to <int>, but user Ids stored as integers may lead to formatting issues (e.g., scientific notation) or accidental calculations, so we will convert <dbl> to <chr>.
+```{r step3221, echo=TRUE, results='hide'}
+
+# Convert user ID columns to character type in all datasets
+daily_activity <- daily_activity %>% 
+  mutate(id = as.character(id))
+hourly_calories <- hourly_calories %>% 
+  mutate(id = as.character(id))
+hourly_steps <- hourly_steps %>% 
+  mutate(id = as.character(id))
+daily_sleep <- daily_sleep %>% 
+  mutate(id = as.character(id))
+```
+
+
+#### 3.2.2.2 Update Date Column Data Type
+
+Second, we’ll address the date/date-time columns.
+```{r step3222, echo=TRUE, results='hide'}
+
+# Convert date and datetime columns to proper date formats
+daily_activity <- daily_activity %>% 
+  mutate(activity_date = mdy(activity_date))
+hourly_calories <- hourly_calories %>% 
+  mutate(activity_hour = mdy_hms(activity_hour))
+hourly_steps <- hourly_steps %>% 
+  mutate(activity_hour = mdy_hms(activity_hour))
+```
+
+
+##### 3.2.2.2.1 Caveat: daily_sleep Date Column
+
+Examining the daily_sleep data frame’s date-time column (sleep_day), we have noted that the rows in preview appear to only include midnight, which does make sense because this dataset contains *daily* sleep time totals for each user. However, we’ll use unique() to extract only the unique time values to gain certainty that no other times exist within the column.
+```{r step32221, echo=TRUE, results='hide'}
+
+# Convert sleep day column to POSIXct format and extract unique times
+daily_sleep$sleep_day <- as.POSIXct(daily_sleep$sleep_day, format = "%m/%d/%Y %I:%M:%S %p")
+unique(format(daily_sleep$sleep_day, "%H:%M:%S"))
+```
+
+Since sleep_day does in fact only contain midnight across all rows, and because we don’t need the time component, we’ll first use as.POSIXct() to convert the column to a proper date-time object, and secondly we’ll add a pipe with as.Date() to drop the time component.
+```{r step32221-convert, echo=TRUE, results='hide'}
+
+# Convert sleep day column to POSIXct format and then extract the date
+daily_sleep <- daily_sleep %>% 
+  mutate(sleep_day = as.POSIXct(sleep_day, format = "%m/%d/%Y %H:%M:%S") %>% as.Date())
+```
+
+Now we have a proper <date> format.
+
+### 3.2.3 Duplicate Date Columns for Merging
+
+#### 3.2.3.1 daily_activity & daily_sleep
+
+Later on, we'll want to merge daily_activity and daily_sleep; we'll also want to keep track of the original data frames for clarity, so we'll duplicate the date columns with a new equivalent name. *(This redundancy may provide clarity in the future.)*
+```{r step3231, echo=TRUE, results='hide'}
+
+# Duplicate the 'date' column in both datasets, with aligned names
+daily_activity <- daily_activity %>% 
+  mutate(date = activity_date)
+daily_sleep <- daily_sleep %>% 
+  mutate(date = sleep_day)
+```
+
+
+#### 3.2.3.2 hourly_[metrics]
+
+We'll apply the same concept to our hourly data frames (calories, steps).
+```{r step3232, echo=TRUE, results='hide'}
+
+# # Duplicate the 'date-time' column in both datasets, with aligned names
+hourly_calories <- hourly_calories %>% 
+  mutate(date = activity_hour)
+hourly_steps <- hourly_steps %>% 
+  mutate(date = activity_hour)
+```
+
+
+#### 3.2.3.3 Rename Originals
+
+Finally we’ll rename our original date columns so they are aligned yet distinguishable across data frames.
+
+We'll use sleep_day as the baseline, only removing the underscore.
+```{r step3233, echo=TRUE, results='hide'}
+
+# Rename date and time columns across all datasets
+daily_activity <- daily_activity %>% 
+  rename(activityday = activity_date)
+hourly_calories <- hourly_calories %>% 
+  rename(calorieshour = activity_hour)
+hourly_steps <- hourly_steps %>% 
+  rename(stepshour = activity_hour)
+daily_sleep <- daily_sleep %>% 
+  rename(sleepday = sleep_day)
+```
+
+
+## 3.3 Pre-Merging Validation
+
+We want to ensure that the values of our hourly datasets (hourly_calories, hourly_steps) match daily_activity. We will sum the hourly data in order to validate accuracy and consistency.
+
+### 3.3.1 Create Summarized Datasets
+
+First we'll extract the date, group by id and date, and sum the respective hourly values to get daily totals.
+```{r step331, echo=TRUE, results='hide'}
+
+# Aggregate hourly data to calculate daily totals for calories and steps
+hourly_calories_daily <- hourly_calories %>%
+  mutate(date = as.Date(calorieshour)) %>% 
+  group_by(id, date) %>% 
+  summarize(daily_total_calories = sum(calories, na.rm = TRUE), .groups = 'drop')
+
+hourly_steps_daily <- hourly_steps %>% 
+  mutate(date = as.Date(stepshour)) %>% 
+  group_by(id, date) %>% 
+  summarize(daily_total_steps = sum(step_total, na.rm = TRUE), .groups = 'drop')
+```
+
+
+### 3.3.2 Merge with daily_activity
+
+Now we can merge the aggregated hourly data with daily_activity in a new data frame.
+
+We will ensure that all rows from the daily_activity dataset are preserved, even when there are no corresponding matches in other dataset -- to retain a complete dataset for accurate insights.
+```{r step332, echo=TRUE}
+
+# Merge daily activity data with aggregated hourly calories and steps data
+validation_data <- daily_activity %>% 
+  left_join(hourly_calories_daily, by = c("id", "date")) %>% 
+  left_join(hourly_steps_daily, by = c("id", "date"))
+
+glimpse(validation_data)
+```
+
+
+### 3.3.3 Calculate Correlation Values
+
+Using the new 'validation_data,' we can calculate correlation values against their counterpart totals in daily_activity.
+```{r step333, echo=TRUE}
+
+# Calculate correlation values
+cor(validation_data$daily_total_calories, validation_data$calories, use = "complete.obs")
+cor(validation_data$daily_total_steps, validation_data$total_steps, use = "complete.obs")
+```
+
+These results showing very strong correlation tell us that our summarized hourly data:
+
+- Closely matches the daily totals
+- Serves as a reliable source for analysis
+- Indicates strong internal consistency, meaning the FitBit users logged data fairly regularly
+
+Note: The <1.0 correlations remind us that the wearable data logging isn’t perfect – this is a limitation.
+
+## 3.4 Merging
+
+We will merge our daily-level datasets -- retaining all rows from daily_activity because since daily_activity has the most complete listing of users and dates -- by the id and date columns.
+```{r step34, echo=TRUE, results='hide'}
+
+# Merge daily activity sleep, and aggregated hourly data into final dataset
+final_data <- daily_activity %>% 
+  left_join(daily_sleep, by = c("id", "date")) %>% 
+  left_join(hourly_calories_daily, by = c("id", "date")) %>% 
+  left_join(hourly_steps_daily, by = c("id", "date"))
+```
+
+
+## 3.5 Validation
+
+Now that we have completed the merges, we will validate that the resulting final_data matches our expectations.
+
+### 3.5.1 Validate Dimensions
+```{r step351, echo=TRUE}
+nrow(final_data)
+summary(final_data)
+```
+
+The summary() function confirms that key variables like steps, calories, and sleep values fall within expected ranges. The presence of NAs in our sleep-related columns aligns with our understanding that not all users logged sleep data.
+
+### 3.5.2 Validate Unique Users
+```{r step352, echo=TRUE}
+
+# Count unique users
+final_data %>% summarize(unique_users = n_distinct(id))
+```
+
+### 3.5.3 Validate Time Series
+```{r step353, echo=TRUE}
+
+# Identify and filter rows with duplicate data
+final_data %>% 
+  count(id, date) %>% 
+  filter(n > 1)
+```
+
+
+# 4. Analyze & Share Phases
+
+
+## 4.1 Exploratory Data Analysis (EDA): Part I
+
+We have successfully assessed the data quality of our datasets, processed them, and developed a basic understanding of their structures and contents. Now, we will manually calculate summary statistics to gain a deeper understanding of the daily data. To extract the most relevant insights, we will focus on calories, steps, minutes asleep, and time in bed.
+
+### 4.1.1 Central Tendency
+
+
+#### 4.1.1.1 Mean
+
+To calculate the mean, we will use the following approach:
+
+```{r step4111, echo=TRUE}
+
+# Calculate the mean of key metrics across final_data 
+final_data %>% 
+  summarize(
+    across(
+  c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+  ~ mean(.x, na.rm = TRUE)
+    )
+  ) %>% 
+  rename(
+    mean_calories = daily_total_calories,
+    mean_steps = daily_total_steps,
+    mean_sleep_minutes = total_minutes_asleep,
+    mean_bed_minutes = total_time_in_bed
+    )
+```
+       
+#### 4.1.1.2 Median
+
+To calculate the median, we will use the following approach:
+
+```{r step4112, echo=TRUE}
+# Calculate the median of key metrics across final_data 
+final_data %>% 
+  summarize(
+    across(
+      c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+      ~ median(.x, na.rm = TRUE)
+    )
+  ) %>% 
+  rename(
+    median_calories = daily_total_calories,
+    median_steps = daily_total_steps,
+    median_sleep_minutes = total_minutes_asleep,
+    median_bed_minutes = total_time_in_bed
+    )
+```
+### 4.1.2 Dispersion
+
+#### 4.1.2.1 Standard Deviation
+
+To calculate the standard deviation, we will use the following approach:
+
+```{r step4121, echo=TRUE}
+# Calculate the standard deviation of key metrics across final_data 
+final_data %>% 
+  summarize(
+    across(
+      c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+      ~ sd(.x, na.rm = TRUE)
+    )
+  ) %>% 
+  rename(
+    sd_calories = daily_total_calories,
+    sd_steps = daily_total_steps,
+    sd_sleep_minutes = total_minutes_asleep,
+    sd_bed_minutes = total_time_in_bed
+    )
+```
+#### 4.1.2.2 Variance
+
+To calculate the variance, we will use the following approach:
+
+```{r step4122, echo=TRUE}
+
+# Calculate variance of key metrics across final_data 
+final_data %>% 
+  summarize(
+    across(
+      c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+      ~ var(.x, na.rm = TRUE)
+    )
+  ) %>% 
+  rename(
+    var_calories = daily_total_calories,
+    var_steps = daily_total_steps,
+    var_sleep_minutes = total_minutes_asleep,
+    var_bed_minutes = total_time_in_bed
+    )
+```
+Calories and steps show high variability, so we will use box plots to explore them further.
+
+##### 4.1.2.2.1 Variance Drill Down
+
+```{r step41221-calories}
+# Create a box plot of daily calories burned, excluding missing values
+final_data %>%
+  filter(!is.na(daily_total_calories)) %>% 
+  ggplot(aes(x = factor(0), y = daily_total_calories)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Daily Calories Burned")
+```
+
+```{r step412221-steps}
+# Create a box plot of daily steps, excluding missing values
+final_data %>%
+  filter(!is.na(daily_total_steps)) %>% 
+  ggplot(aes(x = factor(0), y = daily_total_steps)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Daily Steps")
+```
+
+Both box plots display significant outliers, which help explain the variance results -- therefore we will move on to the next analysis.
+
+#### 4.1.2.3 Range
+
+To calculate the range, we will use the following approach:
+
+```{r step4123, echo=TRUE}
+
+# Calculate range of key metrics across final_data 
+final_data %>% 
+  summarize(
+    across(
+      c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+      ~ max(.x, na.rm = TRUE) - min(.x, na.rm = TRUE)
+    )
+  ) %>% 
+  rename(
+    range_calories = daily_total_calories,
+    range_steps = daily_total_steps,
+    range_sleep_minutes = total_minutes_asleep,
+    range_bed_minutes = total_time_in_bed
+    )
+```
+
+#### 4.1.2.4 Interquartile Range (IQR)
+
+To calculate the IQR, we will use the following approach:
+
+```{r step4124, echo=TRUE}
+
+# Calculate IQR of key metrics across final_data 
+final_data %>% 
+  summarize(
+    across(
+      c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+      ~ IQR(.x, na.rm = TRUE)
+    )
+  ) %>% 
+  rename(
+    iqr_calories = daily_total_calories,
+    iqr_steps = daily_total_steps,
+    iqr_sleep_minutes = total_minutes_asleep,
+    iqr_bed_minutes = total_time_in_bed
+    )
+```
+
+
+#### 4.1.2.5 Distribution Shape
+
+##### 4.1.2.5.1 Skewness and Kurtosis
+
+To calculate the skewness and kurtosis, we will use the following approach:
+```{r step4125, echo=TRUE}
+
+# Calculate skewness and kurtosis of key metrics across final_data and reshape the results for readability 
+final_data %>% 
+  summarize(
+    across(
+      c("daily_total_calories", "daily_total_steps", "total_minutes_asleep", "total_time_in_bed"),
+      list(
+        skew = ~ skewness(.x, na.rm = TRUE),
+        kurt = ~ kurtosis(.x, na.rm = TRUE)
+      ),
+        .names = "{col}_{fn}"
+    )
+  ) %>% 
+  pivot_longer(
+    everything(),
+    names_to = c("variable", "stat"),
+    names_pattern = "^(.*)_(skew|kurt)$",
+    values_to = "value"
+  ) %>% 
+  mutate(value = round(value, 3))
+```
+
+##### 4.1.2.5.2 Distribution Plots
+
+To visualize distribution, we will use the following approach:
+```{r step41252-calories, echo=TRUE}
+
+# Create histogram of daily calories burned, excluding missing values
+final_data %>% 
+  filter(!is.na(daily_total_calories)) %>%
+  ggplot(aes(x = daily_total_calories)) +
+  geom_histogram(binwidth = 200, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Calories Burned")
+```
+
+```{r step41252-steps, echo=TRUE}
+
+# Create histogram of daily steps, excluding missing values
+final_data %>% 
+  filter(!is.na(daily_total_steps)) %>%
+  ggplot(aes(x = daily_total_steps)) +
+  geom_histogram(binwidth = 500, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Total Steps")
+```
+
+```{r step41252-asleep, echo=TRUE}
+
+# Create histogram of daily minutes asleep, excluding missing values
+final_data %>% 
+  filter(!is.na(total_minutes_asleep)) %>%
+  ggplot(aes(x = total_minutes_asleep / 60)) + # Convert minutes to hours
+  geom_histogram(binwidth = 0.5, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Sleep Minutes")
+```
+
+```{r step41252-bed, echo=TRUE}
+
+# Create histogram of daily minutes in bed, excluding missing values
+final_data %>% 
+  filter(!is.na(total_time_in_bed)) %>%
+  ggplot(aes(x = total_time_in_bed / 60)) + # Convert minutes to hours
+  geom_histogram(binwidth = 0.5, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Bed Minutes")
+```
+
+
+## 4.2 EDA Part II: Bivariate Relationships
+
+Now we will explore 1:1 relationships between our key variables -- we'll exclude total_time_in_bed but soon we'll return to that variable.
+
+### 4.2.1 Viz: Calories vs. Steps
+
+To visualize the relationship between calorie burn and steps, we will use the following approach:
+```{r step421, echo=TRUE}
+
+# Create a scatter plot of daily calories burned vs. daily steps, colored by weekday
+# Add a linear regression line (without confidence interval) to show trend
+final_data %>% 
+  filter(!is.na(daily_total_calories) & !is.na(daily_total_steps)) %>%
+  mutate(weekday = factor(weekdays(activityday),
+                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>% 
+  ggplot(aes(x = daily_total_calories, y = daily_total_steps, color = weekday))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4")+
+  labs(
+    title = "Calories vs. Steps",
+    x = "Daily Calories Burned",
+    y = "Daily Total Steps"
+  ) +
+  scale_color_viridis_d()
+```
+
+
+The trend line shows a moderate positive correlation between calories burned and steps: as step counts increase, calories burned tend to increase as well.
+
+This pattern is expected -- walking directly contributes to calories expenditure. Furthermore, the clustering of most data points between 0–15,000 steps and 1,500–3,000 calories burned reflects typical daily activity ranges.
+
+Interestingly, calorie burn from walking appears consistent across weekdays and weekends.
+
+
+#### 4.2.1.1 Viz: Calories vs. Steps with Threshold & Averages
+
+For presentation purposes, we may choose to add a labeled 7,000-step threshold line -- based on a [JAMA Network Open study](https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2783711) which states that in a cohort study of 2,110 adults, participants taking at least 7,000 steps per day had a 50% to 70% lower risk of all-cause mortality compared to those taking fewer than 7,000 steps.
+
+First, we will calculate the percentage of users whose average daily steps met and did not meet the threshold, to add to our visualization:
+```{r step4221-calculation}
+
+# Calculate percentage of users meeting and not meeting 7000 daily step goal
+final_data %>% 
+  group_by(id) %>% 
+  summarize(avg_daily_steps = mean(daily_total_steps, na.rm = TRUE)) %>% 
+  summarize(
+    percent_met = mean(avg_daily_steps >= 7000) * 100,
+    percent_not_met = mean(avg_daily_steps < 7000) * 100
+  )
+```
+
+
+Now, we will incorporate these percentages into our visualization alongside the threshold line to enhance interpretability and highlight user distribution relative to the benchmark.
+```{r step4221, echo=TRUE}
+
+# Create scatter plot of daily calories burned vs. daily steps, colored by weekday
+# Add a linear regression line to show trend
+# Highlight the 7,000 step count threshold with a dashed line and annotations for user segments above and below
+
+final_data %>% 
+  filter(!is.na(daily_total_calories) & !is.na(daily_total_steps)) %>%
+  mutate(weekday = factor(weekdays(activityday),
+                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>% 
+  ggplot(aes(x = daily_total_calories, y = daily_total_steps, color = weekday))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4")+
+  geom_hline(yintercept = 7000, linetype = "dashed", color = "blue", size = 1)+
+  annotate("text", x = 550, y = 8700, label = "7,000 Step Count Threshold", color = "blue3", size = 2.3)+
+  annotate("text", x = 100, y = 22000, label = "53.1% of users' avg daily steps met threshold", color = "black", size = 2.5, hjust = 0)+
+  annotate("text", x = 2400, y = -100, label = "46.9% of users' avg daily steps did not meet threshold", color = "black", size = 2.5, hjust = 0)+
+  labs(
+    title = "Calories vs. Steps",
+    x = "Daily Calories Burned",
+    y = "Daily Total Steps"
+  ) +
+  scale_color_viridis_d()
+```
+
+
+### 4.2.2 Viz: Calories vs. Sleep
+
+To visualize the relationship between calorie expenditure and sleep, we will use the following approach:
+```{r step422, echo=TRUE}
+
+# Create scatter plot of daily calories burned vs. daily sleep duration, colored by weekday
+# Add a linear regression line to show trend
+final_data %>% 
+    filter(!is.na(daily_total_calories) & !is.na(total_minutes_asleep)) %>%
+  mutate(weekday = factor(weekdays(activityday),
+                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>% 
+  ggplot(aes(x = daily_total_calories, y = total_minutes_asleep, color = weekday))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4")+
+  labs(
+    title = "Calories vs. Sleep Duration",
+    x = "Daily Calories Burned",
+    y = "Daily Minutes Asleep"
+  ) +
+  scale_color_viridis_d()
+```
+
+
+The horizontal line indicates that there's no meaningful correlation between calorie exhaustion and sleep.
+
+Next, we will further explore the relationship by calculating the correlation between the variables.
+
+
+#### 4.2.2.1 Correlation: Calories vs. Sleep
+```{r step4222, echo=TRUE}
+
+# Calculate correlation between daily calories burned and total minutes asleep
+cor(final_data$daily_total_calories, final_data$total_minutes_asleep, use = "complete.obs")
+```
+
+This result reflects an extremely weak an extremely weak negative relationship, indicating that no strong relationship exists between the variables.
+
+To dive deeper, we will examine whether calories burned on one day are associated with sleep duration on the following day.
+
+
+##### 4.2.2.1.1 Viz: Calories vs. Next Day Sleep
+```{r step422211, echo=TRUE}
+
+# Create scatter plot of daily calories burned vs. next-day sleep duration, colored by weekday
+# Add a linear regression line to show trend
+final_data %>% 
+  arrange(id, activityday) %>% 
+  group_by(id) %>% 
+  mutate(next_day_sleep = lead(total_minutes_asleep)) %>% # Create new column to shift sleep minutes by user and day
+  ungroup() %>% 
+  filter(!is.na(daily_total_calories) & !is.na(next_day_sleep)) %>% 
+  mutate(weekday = factor(weekdays(activityday),
+                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>% 
+  ggplot(aes(x = daily_total_calories, y = next_day_sleep, color = weekday))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4")+
+  labs(
+    title = "Calories vs. Next-Day Sleep Duration",
+    x = "Daily Calories Burned",
+    y = "Next-Day Minutes Asleep"
+  )+
+  scale_color_viridis_d()
+```
+
+
+Again, we will further explore the relationship by calculating the correlation between the variables.
+
+
+###### 4.2.2.1.1.1 Correlation: Calories vs. Next Day Sleep
+```{r step 422111, echo=TRUE}
+
+# Calculate the correlation between daily calories burned and next-day sleep duration
+final_data %>% 
+  arrange(id, activityday) %>% 
+  group_by(id) %>% 
+  mutate(next_day_sleep = lead(total_minutes_asleep)) %>% 
+  ungroup() %>% 
+  filter(!is.na(daily_total_calories) & !is.na(next_day_sleep)) %>% 
+  summarize(correlation = cor(daily_total_calories, next_day_sleep, use = "complete.obs"))
+```
+
+We're seeing a slight shift in the relationship -- There appears to be a negligible correlation between calories burned and sleep duration the following day; both relationships are too weak to suggest a reliable association.
+
+
+### 4.2.3 Viz: Steps vs. Sleep
+
+To visualize the relationship between steps sleep duration, we will use the following approach:
+```{r step423, echo=TRUE}
+
+# Create scatter plot of daily total steps vs. daily minutes asleep, colored by weekday
+# Add a linear regression line to show trend
+final_data %>% 
+      filter(!is.na(daily_total_steps) & !is.na(total_minutes_asleep)) %>%
+  mutate(weekday = factor(weekdays(activityday),
+                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>% 
+  ggplot(aes(x = daily_total_steps, y = total_minutes_asleep, color = weekday))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4")+
+  labs(
+    title = "Steps vs. Sleep Duration",
+    x = "Daily Total Steps",
+    y = "Daily Minutes Asleep"
+  ) +
+  scale_color_viridis_d()
+```
+
+This slightly downward trend line suggests a weak to moderate negative correlation. 
+
+We will further investigate this relationship as well, calculating the correlation:
+
+#### 4.2.3.1 Correlation: Steps vs. Sleep
+```{r step4231, echo=TRUE}
+# Calculate correlation between daily total steps and sleep duration
+cor(final_data$daily_total_steps, final_data$total_minutes_asleep, use = "complete.obs")
+```
+
+This -0.23 correlation indicates a weak negative relationship. 
+
+Looking back at both calorie exhaustion and steps when compared against sleep duration -- we can infer that higher physical activity does not necessarily correlate with longer sleep duration -- neither on the same day nor the following day.
+
+It's important to note that there are other factors influence sleep duration that we don't have data on.
+
+As such, Bellabeat might explore whether users would benefit from guidance on improving **sleep hygiene** rather than assuming that increased physical activity naturally leads to longer sleep. This shift in focus towards sleep *hygiene,* rather than just *duration,* will segue us into the third phase of our Exploratory Data Analysis.
+
+But before we move to EDA Part III, we will revisit again public health guidelines and analyze health goal adherence based on daily sleep duration and step counts.
+
+### 4.2.4 Viz: User Segmentation by Health Goal Adherence
+
+**Daily Sleep Duration**
+As previously referenced, a [JAMA Network Open study](https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2783711) states that in a cohort study of 2,110 adults, participants taking at least 7,000 steps per day had a 50% to 70% lower risk of all-cause mortality compared to those taking fewer than 7,000 steps.
+
+**Daily Steps**
+Adults of any age from 18 to beyond 65, are advised a minimum of seven hours of sleep per night, as per the recommendation of the [CDC](https://www.cdc.gov/sleep/about/index.html#cdcreference_3) citing the National Sleep Foundation and the American Academy of Sleep Medicine and Sleep Research Society.
+
+To illustrate who is consistently meeting these key health guidelines, defined as achieving the goal at least 60% of the time, we will take the following approach:
+```{r step424, echo=TRUE}
+
+# Set step and sleep thresholds
+step_threshold <- 7000
+sleep_threshold <- 420 # 7 hours * 60 minutes
+
+# Create user goals based on whether each user met the thresholds
+user_goals <- final_data %>% 
+  filter(!is.na(total_minutes_asleep), !is.na(daily_total_steps)) %>%
+  mutate(
+    sleep_goal_met = total_minutes_asleep >= sleep_threshold,
+    step_goal_met = daily_total_steps >= step_threshold
+  )
+
+# Summarize percentage of users meeting each goal
+user_summary <- user_goals %>% 
+  group_by(id) %>% 
+  summarize(
+    step_pct = mean(step_goal_met) * 100,
+    sleep_pct = mean(sleep_goal_met) * 100
+  ) %>% 
+  mutate(
+    step_goal = ifelse(step_pct >= 60, "Consistent Steps", "Inconsistent Steps"),
+    sleep_goal = ifelse(sleep_pct >= 60, "Consistent Sleep", "Inconsistent Sleep")
+  )
+
+# Count users and calculate percentages
+goal_data <- user_summary %>% 
+  count(step_goal, sleep_goal) %>% 
+  mutate(
+    percent = n / sum(n) * 100,
+    label = paste0(round(percent, 1), "%")
+  )
+
+# Create new factor variable for the combinations of goals
+goal_data$combo <- factor(
+  paste(goal_data$step_goal, "&", goal_data$sleep_goal),
+  levels = c(
+    "Consistent Steps & Consistent Sleep",
+    "Consistent Steps & Inconsistent Sleep",
+    "Inconsistent Steps & Consistent Sleep",
+    "Inconsistent Steps & Inconsistent Sleep"
+  )
+)
+
+# Define custom colors for each combination of goals
+combo_colors <- c(
+  "Consistent Steps & Consistent Sleep" = "#00F5FF",
+  "Consistent Steps & Inconsistent Sleep" = "slategray1",
+  "Inconsistent Steps & Consistent Sleep" = "slategray2",
+  "Inconsistent Steps & Inconsistent Sleep" = "gray61"
+)
+
+# Plot the distributionn of users meeting their goals
+ggplot(goal_data, aes(x = percent, y = fct_rev(combo), fill = combo))+
+  geom_col(width = 0.6) +
+  geom_text(aes(label = label), hjust = 1.1, color = "black", size = 4)+ 
+  scale_fill_manual(values = combo_colors)+
+  labs(
+    title = "Percentage of Users Meeting Goals Consistently (≥60% of the Time)",
+    x = "Percentage of Users",
+    y = NULL,
+    fill = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0, size = 11, face = "bold")
+  )
+```
+
+
+We have categorized users into four groups based on whether they meet their step and sleep goals consistently (≥60% of the time) or inconsistently (<60% of the time). As the visualization illustrates, the leading category consists of users who consistently achieve both goals with 40% of users meeting both criteria; 20% of users fall short in both areas.
+
+## 4.3 EDA Part III: Sleep Efficiency vs. Activity Variables
+
+
+**Untroubled Slumber?**
+
+As mentioned previously *(in step 4.2)*, we will reincorporate total_time_in_bed. Does daily activity correlate with how **efficiently** users sleep -- or how much time they spend awake in bed? We can determine *sleep efficiency* by dividing 'total_minutes_asleep' by 'total_time_in_bed.' Let's create a column for this new sleep efficiency variable and validate the math. Then, with sleep_efficiency calculated, we can plot its relationship with our other variables.
+
+
+### 4.3.1 Create sleep_efficiency Column
+```{r step431, echo=TRUE}
+
+# Create new column for sleep efficiency
+final_data <- final_data %>% 
+  mutate(sleep_efficiency = total_minutes_asleep / total_time_in_bed)
+```
+
+
+### 4.3.2 Validation: sleep_efficiency Calculation
+```{r step 432, echo=TRUE}
+
+# Recalculate sleep efficiency and create maximum difference between it and new/existing 'sleep_efficiency' column
+final_data %>% 
+  filter(!is.na(total_minutes_asleep), !is.na(total_time_in_bed)) %>% 
+  mutate(recalc_eff = total_minutes_asleep / total_time_in_bed) %>% 
+  summarize(max_diff = max(abs(recalc_eff - sleep_efficiency), na.rm = TRUE))
+```
+
+Since the maximum difference is zero, this confirms that the sleep_efficiency column is accurate.
+
+
+### 4.3.3 Viz: Sleep Efficiency vs. Activity Variables
+```{r step433, echo=TRUE}
+
+# Pivot to create separate rows for calories and steps, then plot their relationship with sleep efficiency
+final_data %>% 
+  pivot_longer(
+    cols = c(daily_total_calories, daily_total_steps),
+    names_to = "variable",
+    values_to = "value"
+  ) %>% 
+  mutate(
+    variable = recode(variable,
+                      daily_total_calories = "Daily Calories", # Rename for clarity
+                      daily_total_steps = "Daily Steps")
+  ) %>% 
+  filter(!is.na(sleep_efficiency) & !is.na(value)) %>% 
+  ggplot(aes(x = sleep_efficiency, y = value)) +
+  geom_point(alpha = 0.5, aes(color = variable)) +
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4") +
+  labs(
+    title = "Sleep Efficiency vs. Daily Variables",
+    x = "Sleep Efficiency",
+    y = "Value"
+  ) +
+  facet_wrap (~variable, scales = "free_y")+ # Separate plots for calories and steps with different y-scales
+  scale_color_viridis_d(guide = "none") # Viridis color pallete with no legend
+```
+
+
+Daily calorie expenditure shows a mild positive relationship with sleep efficiency, while daily steps display a mild weak negative trend. Let's calculate the Pearson correlations in the next step.
+
+### 4.3.2 Correlation: Sleep Efficiency vs. Activity
+```{r step432, echo=TRUE}
+
+# Calculate correlation between sleep efficiency and daily calories and steps
+final_data %>% 
+  pivot_longer(
+    cols = c(daily_total_calories, daily_total_steps),
+    names_to = "variable", # New column to indicate variable type
+    values_to = "value" # New column for the corresponding values
+  ) %>% 
+  mutate(
+    variable = recode(variable,
+                      daily_total_calories = "Daily Calories",
+                      daily_total_steps = "Daily Steps")
+  ) %>% 
+  group_by(variable) %>% # Group by each variable to calculate separate correlations
+  summarize(correlation = cor(sleep_efficiency, value, use = "complete.obs"))
+```
+
+These results confirm the visualizations -- suggesting that higher calorie expenditure may slightly relate to higher sleep efficiency, while more steps may slightly relate to lower sleep efficiency.
+
+Let's dive deeper by analyzing next-day sleep efficiency -- just as we did in earlier analyses -- to see how *today's* activity might influence *tomorrow's* sleep quality.
+
+
+
+#### 4.3.2.1 Viz: Next-Day Sleep Efficiency vs. Daily Activity
+
+To visualize the potential relationship between daily activities and next-day sleep efficiency, we will use the following approach:
+```{r step4311, echo=TRUE}
+
+# Create next-day sleep efficiency by shifting sleep metrics forward for each user
+final_data <- final_data %>% 
+  arrange(id, activityday) %>% 
+  group_by(id) %>% 
+  mutate(next_day_sleep_efficiency = lead(total_minutes_asleep) / lead(total_time_in_bed)) %>%
+  ungroup()
+
+# Visualize relationship between next-day sleep efficiency and daily activity variables
+final_data %>% 
+  pivot_longer(
+    cols = c(daily_total_calories, daily_total_steps),
+    names_to = "variable",
+    values_to = "value"
+  ) %>% 
+  mutate(
+    variable = recode(variable,
+                      daily_total_calories = "Daily Calories",  # Rename variable labels for clearer facet titles
+                      daily_total_steps = "Daily Steps")
+  ) %>% 
+  filter(!is.na(next_day_sleep_efficiency) & !is.na(value)) %>% 
+  ggplot(aes(x = next_day_sleep_efficiency, y = value, color = variable))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm", se = FALSE, color = "tomato4")+
+  labs(title = "Daily Behavior vs. Next-Day Sleep Efficiency",
+       x = "Next-Day Sleep Efficiency",
+       y = "Daily Value (Calories or Steps)"
+  )+
+  facet_wrap(~ variable, scales = "free")+ # Create separate panels for each variable with independent y-axes
+  scale_color_viridis_d(guide = "none") # Add color palette for clarity
+```
+
+
+Similarly, we are again seeing a slightly positive relationship between calories burned and sleep efficiency, and a slightly negative relationship between steps and sleep efficiency.
+
+We'll calculate these correlations in the next step.
+
+
+##### 4.3.2.1.1 Correlation: Next-Day Sleep Efficiency vs. Activity
+```{r step43111, echo=TRUE}
+
+# Transpose data to have variables in a single column
+final_data %>% 
+  pivot_longer(
+    cols = c(daily_total_calories, daily_total_steps),
+    names_to = "variable",
+    values_to = "value"
+  ) %>% 
+  mutate(
+    variable = recode(variable,
+                      daily_total_calories = "Daily Calories", # Rename variables for clarity
+                      daily_total_steps = "Daily Steps")
+  ) %>% 
+  filter(!is.na(next_day_sleep_efficiency) & !is.na(value)) %>% 
+  group_by(variable) %>% # Group data by activity variable
+  summarize(correlation = cor(next_day_sleep_efficiency, value, use = "complete.obs")) # Use only complete cases for correlation calculation
+```
+
+
+Interestingly, calorie expenditure shows a slightly stronger connection to better next-day sleep efficiency than same-day sleep efficiency.
+
+
+###### 4.3.2.1.1.1 Linear Regression Model Efficiency
+
+Based on the stronger connections observed in the previous step, we will now build a multiple linear regression model using 'daily_total_calories' and 'daily_total_steps' to predict next-day sleep efficiency -- in order to assess how well activity levels might predict sleep efficiency.
+```{r step431111, echo=TRUE}
+
+# Filter to remove rows with missing values for relevant variables
+regression_data <- final_data %>% 
+  filter(!is.na(next_day_sleep_efficiency),
+         !is.na(daily_total_calories),
+         !is.na(daily_total_steps))
+
+# Fit a linear regression model to predict next day's sleep efficiency based on daily calories and steps
+model <- lm(next_day_sleep_efficiency ~ daily_total_calories + daily_total_steps, data = regression_data)
+
+# Display the summary
+summary(model)
+```
+
+Key takeaways from our results:
+
+- Calorie expenditure shows a statistically significant positive effect.
+- Steps show a statistically significant negative effect.
+- R-squared: at 0.1584, the model explains roughly 16% of the variation in next-day sleep efficiency. While modest, this level of predictive power is meaningful and suggests that daily activity has some influence on next-day sleep efficiency.
+
+Next, let's plot model predictions against actual sleep efficiency values to visualize how closely the model's predictions match real outcomes.
+
+
+###### 4.3.2.1.1.2 Model Performance: Predictions vs. Actuals Efficiency
+```{r step431112, echo=TRUE}
+
+# Add predicted sleep efficiency values to the regression_data dataset
+regression_data <- regression_data %>% 
+  mutate(predicted_sleep_eff = predict(model))
+
+# Create scatter plot comparing actual vs. predicted next-day sleep efficiency
+ggplot(regression_data, aes(x = next_day_sleep_efficiency, y = predicted_sleep_eff))+
+  geom_point(alpha = 0.5, color = "skyblue4")+
+  geom_abline(slope = 1, intercept = 0, color = "tomato4", linetype = "dashed")+ # Add a reference line
+  labs(
+    title = "Predicted vs. Actual Next-Day Sleep Efficiency",
+    x = "Actual Sleep Efficiency",
+    y = "Predicted Sleep Efficiency"
+  ) +
+  theme_minimal() # Add minimalist theme
+```
+
+
+While there is certainly some spread -- particularly on lower efficiency days -- most predictions align well with actual values in the 0.85–1.00 range.
+
+Finally, in the next step we'll plot prediction errors against predicted sleep efficiency to identify any concerns with the model.
+
+
+###### 4.3.2.1.1.3 Residual Analysis: Model Diagnostics
+```{r step431113, echo=TRUE}
+
+# Add predicted sleep efficiency and residuals to regression_data
+regression_data <- regression_data %>% 
+  mutate(
+    predicted_sleep_eff = predict(model), # Predict sleep efficiency using the linear model
+    residuals = next_day_sleep_efficiency - predicted_sleep_eff # Calculate difference between actual and predicted
+  )
+
+# Create scatter plot of residuals versus predicted sleep efficiency
+ggplot(regression_data, aes(x = predicted_sleep_eff, y = residuals))+
+  geom_point(alpha = 0.5, color = "skyblue4")+
+  geom_hline(yintercept = 0, linetype = "dashed", color = "tomato4")+ # Add line at y = 0 to indicate no residuals
+  labs(
+    title = "Residuals vs. Predicted Sleep Efficiency",
+    x = "Predicted Sleep Efficiency",
+    y = "Residuals"
+  )+
+  theme_minimal() # Add minimalist theme
+```
+
+
+Residuals are centered around 0 with no clear pattern which is a good indication that the model is operating well and its assumptions hold.
+
+At last, we will move on to our final sections, taking with us the most relevant and impactful findings from the previous steps.
+
+
+# 4.4 Key Insights & Business Recommendations
+
+
+
+### 4.4.1 Sleep Duration Trends
+
+
+**Key Takeaways**
+
+- Sleep duration shows no strong correlation with either daily steps or calories burned -- same-day or next-day *(Steps 4.2.3.1, 4.2.2.1)*.
+- 53.3% of users, however, did not consistently (≥60% of the time) meet recommended sleep duration guidelines, as defined by the [CDC](https://www.cdc.gov/sleep/about/index.html#cdcreference_3) referencing standards from the National Sleep Foundation and the American Academy of Sleep Medicine and Sleep Research Society.
+
+**Business Recommendation**
+
+Bellabeat can send bedtime push notifications to users who frequently fall short of sleep targets, reinforcing healthy habits and long-term well-being.
+
+
+### 4.4.2 Step Count Benchmarks
+
+
+**Key Takeaways**
+
+- Based on a [JAMA Network Open study](https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2783711), taking at least 7,000 steps per day is associated with a 50%–70% lower risk of all-cause mortality.
+- In our data, 53.125% of users met the 7,000-step threshold on average, while 46.875% did not *(Step 4.2.1.1)*.
+- Users as a group averaged 7,591 daily steps *(Step 4.1.1.1)*
+
+**Business Recommendation**
+
+Bellabeat can implement dual user segmentation: reward users consistently meeting 7,000-step benchmark with badges, while nudging those below the benchmark to earn achievement incentives (e.g., badges), encouraging engagement and progress.
+
+
+### 4.4.3 Weekend Calorie Patterns
+
+
+**Key Takeaways**
+
+- Calorie burn from walking appears consistent across weekdays and weekends *(Step 4.2.1)*.
+- No major shift was observed in the calorie-versus-steps relationship by day, suggesting regular and sustained movement habits.
+
+**Business Recommendation**
+
+Bellabeat can promote “Weekend Wellness” campaigns that frame weekends not as time to *catch up* on missed activity, but as a **continuation** of existing healthy routines, reinforcing consistency over peaks and valleys.
+
+### 4.4.4 Activity and Sleep Efficiency
+
+**Key Takeaways**
+
+- Calorie expenditure my be slightly positively associated with same- and next-day sleep efficiency *(Step 4.3.2.1.1)*.
+- Notably, the previous day's calorie burn shows a marginally stronger association with next-day sleep efficiency than same-day metrics *(Steps 4.2.2.1, 4.2.2.1.1)*.
+
+**Business Recommendation**
+
+If more research is conducted to strengthen the link between calorie burn and next-day sleep efficiency, Bellabeat can incorporate education tactics into its content marketing -- perhaps running campaigns around 'better exercise today for better sleep tomorrow -- ultimately encouraging users to continue optimizing their health. Additionally, Bellabeat can encourage its users to engage in calorie-burning activities earlier in the day through targeted nudges, personalized workout suggestions, and community fitness challenges, all promoting movement with potential benefits for sleep.
+
+### 4.4.5 Predictive Modeling for Sleep
+
+**Key Takeaways**
+
+- A linear regression model using previous-day activity metrics explains approximately 15.8% of the variability in next-day sleep efficiency *(Step 4.3.2.1.1.1)*.
+- While modest, this level of predictability offers a starting point for building tailored user recommendations
+
+**Business Recommendation**
+
+Bellabeat should continue developing predictive models with richer user data. These models could anticipate low sleep efficiency for certain users and enable real-time nudges like earlier bedtime prompts, increasing sleep duration and health outcomes.
+
+# 5. Conclusion
+
+This case study analyzed non-Bellabeat smart device data to uncover behavioral trends that could inform the Bellabeat content marketing strategy and app engagement features. Key insights reveal that while many users exhibit consistent activity patterns, a substantial number still fall short of recommended health benchmarks -- particularly around sleep and step goals. These patterns represent a clear opportunity for Bellabeat to offer more personalized guidance, motivation, and support through data-driven interventions.
+
+In parallel, preliminary modeling demonstrates modest but meaningful potential to predict next-day sleep efficiency based on previous day behaviors. Although current models explains a limited portion of the variance, they point to a promising direction: with more robust, Bellabeat-specific data, future models could power highly personalized, predictive experiences for users.
+
+To build on this foundation, Bellabeat may consider the following steps:
+
+- Invest in broader internal data collection and user segmentation
+- Use clustering and pattern recognition to personalize experiences
+- Expand predictive modeling efforts for behavior forecasting
+- Integrate insights into content marketing and app-based nudges
+
+Ultimately, this analysis reinforces the potential for data to become a competitive advantage for Bellabeat. With the right infrastructure and focus, the company can deepen user engagement, enhance its brand positioning, and continue delivering on its mission to empower women through wellness technology.
+
+```{r, results='asis', echo=FALSE}
+cat('
+<style>
+button.btn.btn-default.btn-xs {
+  background-color: #347AB7;
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    let buttons = document.querySelectorAll("button.btn.btn-default.btn-xs");
+    buttons.forEach(btn => {
+      if (btn.textContent === "Show Code") btn.textContent = "\u25B6 Show R Code";
+      if (btn.textContent === "Hide Code") btn.textContent = "\u25BC R Code";
+    });
+
+    buttons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        setTimeout(() => {
+          btn.textContent = btn.textContent.includes("Hide") ? "\u25B6 Show R Code" : "\u25BC Hide R Code";
+        }, 10);
+      });
+    });
+  });
+</script>
+')
+```
